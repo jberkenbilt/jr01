@@ -1,18 +1,21 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.5 1999-07-10 20:38:25 ejb Exp $
+# $Id: jr01.py,v 1.6 1999-07-10 21:16:59 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
 
-import Tkinter;
+import Tkinter
+import math
 
 class JR01State:
     def __init__(self, bars = 3, pegs = 7, lights = 4):
         self.nbars = bars
         self.npegs = pegs
         self.nlights = lights
+        if self.nlights > self.npegs:
+            self.nlights = self.npegs
 
     def set_peg_state(self, barnum, pegnum, position, state):
         print "set peg", (barnum, pegnum, position), "to state", state
@@ -22,6 +25,13 @@ class JR01State:
 
     def set_patch(self, source, dest, count):
         print "increasing connection count from column", source, "to light", dest, "by", count
+
+    def compute(self):
+        print "computing"
+        result = []
+        for i in range(0, self.nlights):
+            result.append(1)
+        return result
 
 class JR01Win:
     # Exceptions
@@ -37,10 +47,14 @@ class JR01Win:
     ringcolor = "#ffdc95"
     redlightoff = "#4d3739"
     greenlightoff = "#324033"
+    redlighton = "#ad1010"
+    greenlighton = "#3da829"
     pegcolor = "black"
     ringholecolor = "black"
     linecolor = "black"
     selectedlinecolor = "blue"
+    compute_off_color = "#ccc"
+    compute_on_color = "#888"
 
     # Static Geometry
     bar_hmargin = 60
@@ -62,7 +76,10 @@ class JR01Win:
     light_top_gap = 70
     light_bottom_gap = 20
     bottom_height = light_top_gap + 2 * light_radius + light_bottom_gap
-    linewidth = 6;
+    linewidth = 6
+    compute_radius = 20
+    compute_x_from_right = 35
+    compute_y_above_bottom = 35
 
     # State information
 
@@ -131,6 +148,10 @@ class JR01Win:
     desttag = "dest"
     destdata = {}
 
+    computetag = "compute"
+
+    lights = []
+
     def __init__(self, tk, state):
         self.state = state
 
@@ -155,6 +176,9 @@ class JR01Win:
                            self.bar_height)
         width = self.bar_width + 2 * self.bar_hmargin
         height = bar_area_height + self.bottom_height
+
+        self.compute_x = width - self.compute_x_from_right
+        self.compute_y = height - self.compute_y_above_bottom
 
         self.light_hgap = 0.9 * (width / (self.state.nlights + 1))
         self.first_light_x = (width -
@@ -195,6 +219,23 @@ class JR01Win:
                              -self.ring_outer_radius,
                              self.destdata, self.desttag)
             self.create_light(i)
+        self.turn_lights_off()
+
+        # Make a pentagonal compute button.
+        pentagon = []
+        degrad = 180.0/math.pi
+        for angle in (range(54, 360, 72)):
+            radians = angle/degrad
+            sin = math.sin(radians)
+            cos = math.cos(radians)
+            x = self.compute_radius * cos + self.compute_x
+            y = self.compute_radius * sin + self.compute_y
+            pentagon.append(x)
+            pentagon.append(y)
+
+        self.compute_button = self.canvas.create_polygon(
+            pentagon, tag=self.computetag,
+            fill=self.compute_off_color)
 
         self.canvas.tag_bind(self.movable, "<ButtonPress-1>", self.bar_set_cb)
         self.canvas.tag_bind(self.movable, "<B1-Motion>", self.bar_move_cb)
@@ -202,6 +243,10 @@ class JR01Win:
         self.canvas.tag_bind(self.sourcetag, "<ButtonPress-1>", self.start_line)
         self.canvas.tag_bind(self.sourcetag, "<B1-Motion>", self.move_line)
         self.canvas.tag_bind(self.sourcetag, "<ButtonRelease-1>", self.end_line)
+        self.canvas.tag_bind(self.computetag, "<ButtonPress-1>",
+                             self.compute_down)
+        self.canvas.tag_bind(self.computetag, "<ButtonRelease-1>",
+                             self.compute_up)
 
     def draw_static_marks(self):
         for i in range(0, self.state.npegs):
@@ -263,7 +308,7 @@ class JR01Win:
             self.pegs[inner_item] = peg
 
     def create_ring(self, ringnum, x, y, voffset, pointdata, tag):
-        data = (ringnum, x, y + voffset);
+        data = (ringnum, x, y + voffset)
         item = self.canvas.create_oval(
             x - self.ring_outer_radius,
             y - self.ring_outer_radius,
@@ -271,7 +316,7 @@ class JR01Win:
             y + self.ring_outer_radius,
             tags=tag,
             fill=self.ringcolor)
-        pointdata[item] = data;
+        pointdata[item] = data
         item = self.canvas.create_oval(
             x - self.ring_inner_radius,
             y - self.ring_inner_radius,
@@ -279,20 +324,16 @@ class JR01Win:
             y + self.ring_inner_radius,
             tags=tag,
             fill=self.ringholecolor)
-        pointdata[item] = data;
+        pointdata[item] = data
 
     def create_light(self, lightnum):
         x = self.first_light_x + lightnum * self.light_hgap
         y = self.light_y
-        if lightnum == 0:
-            fill = self.redlightoff
-        else:
-            fill = self.greenlightoff
-        self.canvas.create_oval(x - self.light_radius,
-                                y - self.light_radius,
-                                x + self.light_radius,
-                                y + self.light_radius,
-                                fill=fill)
+        self.lights.append(
+            self.canvas.create_oval(x - self.light_radius,
+                                    y - self.light_radius,
+                                    x + self.light_radius,
+                                    y + self.light_radius))
 
     def toggle_peg(self, event):
         item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
@@ -401,6 +442,16 @@ class JR01Win:
 
         self.set_cur_line(None)
 
+    def compute_down(self, event):
+        self.canvas.itemconfigure(self.compute_button,
+                                  fill=self.compute_on_color)
+        self.set_lights(self.state.compute())
+
+    def compute_up(self, event):
+        self.canvas.itemconfigure(self.compute_button,
+                                  fill=self.compute_off_color)
+        self.turn_lights_off()
+
     def find_pointdata(self, x, y, pointdata):
         items = self.canvas.find_overlapping(x - self.ring_outer_radius,
                                              y - self.ring_outer_radius,
@@ -421,6 +472,30 @@ class JR01Win:
                 self.canvas.lift(self.cur_line)
                 self.canvas.itemconfigure(self.cur_line,
                                           fill=self.selectedlinecolor)
+
+    def set_lights(self, lightdata):
+        for i in range(0, len(lightdata)):
+            if i == 0:
+                on = self.redlighton
+                off = self.redlightoff
+            else:
+                on = self.greenlighton
+                off = self.greenlightoff
+            if (lightdata[i]):
+                fill = on
+            else:
+                fill = off
+            self.canvas.itemconfigure(self.lights[i], fill=fill)
+
+    def turn_lights_off(self):
+        first = 1
+        for light in self.lights:
+            if first:
+                first = 0
+                fill = self.redlightoff
+            else:
+                fill = self.greenlightoff
+            self.canvas.itemconfigure(light, fill=fill)
 
 
 root = Tkinter.Tk()
