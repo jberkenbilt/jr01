@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.11 1999-07-11 01:52:19 ejb Exp $
+# $Id: jr01.py,v 1.12 1999-07-11 14:30:47 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -139,8 +139,8 @@ class JR01Win:
     ringcolor = "#ffdc95"
     redlightoff = "#4d3739"
     greenlightoff = "#324033"
-    redlighton = "#ad1010"
-    greenlighton = "#3da829"
+    redlighton = "#a50f18"
+    greenlighton = "#309000"
     pegcolor = "black"
     ringholecolor = "black"
     linecolor = "black"
