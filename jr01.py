@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.10 1999-07-11 01:47:30 ejb Exp $
+# $Id: jr01.py,v 1.11 1999-07-11 01:52:19 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -242,6 +242,9 @@ class JR01Win:
         reset_button = Tkinter.Button(button_frame, text="Reset",
                                       command=self.reset)
         reset_button.pack(side=Tkinter.LEFT)
+        reconfigure_button = Tkinter.Button(button_frame, text="Reconfigure",
+                                      command=self.reconfigure)
+        reconfigure_button.pack(side=Tkinter.LEFT)
         quit_button = Tkinter.Button(button_frame, text="Quit",
                                      command=tk.quit)
         quit_button.pack(side=Tkinter.LEFT)
@@ -286,7 +289,12 @@ class JR01Win:
         # Maps (barnum, pegnum, position) to Peg object
         self.peg_table = {}
 
-    def reset(self, state = None):
+    def reset(self):
+        self.reconfigure(JR01State(self.state.nbars,
+                                   self.state.npegs,
+                                   self.state.nlights))
+
+    def reconfigure(self, state = None):
         if state == None:
             while 1:
                 answer = tkSimpleDialog.askstring(
@@ -303,11 +311,6 @@ class JR01Win:
                                                "Invalid input.")
                 else:
                     return
-
-        if state == None:
-            state = JR01State(self.state.nbars,
-                              self.state.npegs,
-                              self.state.nlights)
 
         self.canvas.destroy()
         self.init(state)
@@ -366,7 +369,7 @@ class JR01Win:
                     tkMessageBox.showerror("Bad File", msg)
 
                 # Good file.  Reset state and load configuration.
-                self.reset(JR01State(nbars, npegs, nlights))
+                self.reconfigure(JR01State(nbars, npegs, nlights))
                 for peg in pegs:
                     self.state.set_peg_state(peg[0], peg[1], peg[2], 1)
                 for patch in patches:
