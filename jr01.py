@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.4 1999-07-10 20:28:35 ejb Exp $
+# $Id: jr01.py,v 1.5 1999-07-10 20:38:25 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -111,8 +111,10 @@ class JR01Win:
         def toggle(self):
             self.state = 1 - self.state
             if self.state:
-                self.canvas.itemconfigure(self.outer_item, fill=self.pegcolor)
-                self.canvas.itemconfigure(self.inner_item, fill=self.pegcolor)
+                self.canvas.itemconfigure(self.outer_item,
+                                          fill=JR01Win.pegcolor)
+                self.canvas.itemconfigure(self.inner_item,
+                                          fill=JR01Win.pegcolor)
             else:
                 self.canvas.itemconfigure(self.outer_item,
                                           fill=JR01Win.barcolor)
@@ -170,61 +172,58 @@ class JR01Win:
                                      command=frame.quit)
         quit_button.grid(row=1, col=0)
 
-        canvas = Tkinter.Canvas(frame, width=width, height=height,
-                                background=self.bgcolor,
-                                borderwidth=0, highlightthickness=0,
-                                cursor="hand2")
-        canvas.grid(row=0, col=0)
+        self.canvas = Tkinter.Canvas(frame, width=width, height=height,
+                                     background=self.bgcolor,
+                                     borderwidth=0, highlightthickness=0,
+                                     cursor="hand2")
+        self.canvas.grid(row=0, col=0)
         
-        self.draw_static_marks(canvas)
+        self.draw_static_marks()
 
         for i in range(0, self.state.nbars):
-            self.create_bar(canvas, i, self.first_bar_top + i * self.bar_gap)
+            self.create_bar(i, self.first_bar_top + i * self.bar_gap)
 
         for i in range(0, self.state.npegs):
             x = self.first_peg_x + i * self.peg_gap
-            self.create_ring(i, canvas, x, self.bar_ring_y,
+            self.create_ring(i, x, self.bar_ring_y,
                              self.ring_outer_radius,
                              self.sourcedata, self.sourcetag)
 
         for i in range(0, self.state.nlights):
             x = self.first_light_x + i * self.light_hgap
-            self.create_ring(i, canvas, x, self.light_ring_y,
+            self.create_ring(i, x, self.light_ring_y,
                              -self.ring_outer_radius,
                              self.destdata, self.desttag)
-            self.create_light(canvas, i)
+            self.create_light(i)
 
-        canvas.tag_bind(self.movable, "<ButtonPress-1>", self.bar_set_cb)
-        canvas.tag_bind(self.movable, "<B1-Motion>", self.bar_move_cb)
-        canvas.tag_bind(self.pegtag, "<ButtonPress-1>", self.toggle_peg)
-        canvas.tag_bind(self.sourcetag, "<ButtonPress-1>", self.start_line)
-        canvas.tag_bind(self.sourcetag, "<B1-Motion>", self.move_line)
-        canvas.tag_bind(self.sourcetag, "<ButtonRelease-1>", self.end_line)
+        self.canvas.tag_bind(self.movable, "<ButtonPress-1>", self.bar_set_cb)
+        self.canvas.tag_bind(self.movable, "<B1-Motion>", self.bar_move_cb)
+        self.canvas.tag_bind(self.pegtag, "<ButtonPress-1>", self.toggle_peg)
+        self.canvas.tag_bind(self.sourcetag, "<ButtonPress-1>", self.start_line)
+        self.canvas.tag_bind(self.sourcetag, "<B1-Motion>", self.move_line)
+        self.canvas.tag_bind(self.sourcetag, "<ButtonRelease-1>", self.end_line)
 
-    def draw_static_marks(self, canvas):
+    def draw_static_marks(self):
         for i in range(0, self.state.npegs):
             x = self.first_peg_x + i * self.peg_gap
-            canvas.create_line(x, self.vline_top,
-                               x, self.vline_top + self.vline_height,
-                               fill=self.markcolor)
+            self.canvas.create_line(x, self.vline_top,
+                                    x, self.vline_top + self.vline_height,
+                                    fill=self.markcolor)
 
 
-    def create_bar(self, canvas, barnum, top):
+    def create_bar(self, barnum, top):
         grouptag = self.bartag + "-" + `barnum`
-        main_item = canvas.create_rectangle(self.bar_left,
-                                            top,
-                                            self.bar_right,
-                                            self.bar_height + top,
-                                            tags = (grouptag, self.movable),
-                                            width = 2,
-                                            fill = self.barcolor)
+        main_item = self.canvas.create_rectangle(
+            self.bar_left, top,
+            self.bar_right, self.bar_height + top,
+            tags = (grouptag, self.movable),
+            width = 2, fill = self.barcolor)
         self.move_sets[main_item] = (main_item, grouptag)
-        handle = canvas.create_rectangle(self.bar_right - self.handle_width,
-                                       top + 2,
-                                       self.bar_right - 4,
-                                       top + self.bar_height - 4,
-                                       tags = (grouptag, self.movable),
-                                       width = 0, fill=self.barshadow)
+        handle = self.canvas.create_rectangle(
+            self.bar_right - self.handle_width, top + 2,
+            self.bar_right - 4, top + self.bar_height - 4,
+            tags = (grouptag, self.movable),
+            width = 0, fill=self.barshadow)
         self.move_sets[handle] = (main_item, grouptag)
 
         bar = self.Bar(self.state, barnum)
@@ -232,16 +231,16 @@ class JR01Win:
         self.bars[handle] = bar
 
         for i in range(0, self.state.npegs):
-            self.create_peg(canvas, grouptag, top, barnum, i)
+            self.create_peg(grouptag, top, barnum, i)
 
-    def create_peg(self, canvas, grouptag, top, barnum, pegnum):
+    def create_peg(self, grouptag, top, barnum, pegnum):
 
         for dx in (-self.bar_delta, self.bar_delta):
 
             peg_x = self.first_peg_x + pegnum * self.peg_gap
             peg_y = top + self.peg_vcenter_offset
 
-            outer_item = canvas.create_oval(
+            outer_item = self.canvas.create_oval(
                 dx + peg_x - self.peg_outer_radius,
                 peg_y - self.peg_outer_radius,
                 dx + peg_x + self.peg_outer_radius,
@@ -250,7 +249,7 @@ class JR01Win:
                 outline = "",
                 fill=self.barcolor)
             
-            inner_item = canvas.create_oval(
+            inner_item = self.canvas.create_oval(
                 dx + peg_x - self.peg_inner_radius,
                 peg_y - self.peg_inner_radius,
                 dx + peg_x + self.peg_inner_radius,
@@ -258,45 +257,45 @@ class JR01Win:
                 tags = (grouptag, self.pegtag),
                 fill=self.barshadow)
 
-            peg = self.Peg(self.state, barnum, pegnum, dx, canvas,
+            peg = self.Peg(self.state, barnum, pegnum, dx, self.canvas,
                            outer_item, inner_item)
             self.pegs[outer_item] = peg
             self.pegs[inner_item] = peg
 
-    def create_ring(self, ringnum, canvas, x, y, voffset, pointdata, tag):
+    def create_ring(self, ringnum, x, y, voffset, pointdata, tag):
         data = (ringnum, x, y + voffset);
-        item = canvas.create_oval(x - self.ring_outer_radius,
-                                  y - self.ring_outer_radius,
-                                  x + self.ring_outer_radius,
-                                  y + self.ring_outer_radius,
-                                  tags=tag,
-                                  fill=self.ringcolor)
+        item = self.canvas.create_oval(
+            x - self.ring_outer_radius,
+            y - self.ring_outer_radius,
+            x + self.ring_outer_radius,
+            y + self.ring_outer_radius,
+            tags=tag,
+            fill=self.ringcolor)
         pointdata[item] = data;
-        item = canvas.create_oval(x - self.ring_inner_radius,
-                                  y - self.ring_inner_radius,
-                                  x + self.ring_inner_radius,
-                                  y + self.ring_inner_radius,
-                                  tags=tag,
-                                  fill=self.ringholecolor)
+        item = self.canvas.create_oval(
+            x - self.ring_inner_radius,
+            y - self.ring_inner_radius,
+            x + self.ring_inner_radius,
+            y + self.ring_inner_radius,
+            tags=tag,
+            fill=self.ringholecolor)
         pointdata[item] = data;
 
-    def create_light(self, canvas, lightnum):
+    def create_light(self, lightnum):
         x = self.first_light_x + lightnum * self.light_hgap
         y = self.light_y
         if lightnum == 0:
             fill = self.redlightoff
         else:
             fill = self.greenlightoff
-        canvas.create_oval(x - self.light_radius,
-                           y - self.light_radius,
-                           x + self.light_radius,
-                           y + self.light_radius,
-                           fill=fill)
-
+        self.canvas.create_oval(x - self.light_radius,
+                                y - self.light_radius,
+                                x + self.light_radius,
+                                y + self.light_radius,
+                                fill=fill)
 
     def toggle_peg(self, event):
-        canvas = event.widget
-        item = canvas.find_withtag(Tkinter.CURRENT)[0]
+        item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
         if self.pegs.has_key(item):
             peg = self.pegs[item]
             peg.toggle()
@@ -305,19 +304,18 @@ class JR01Win:
         self.last_x = event.x
 
     def bar_move_cb(self, event):
-        canvas = event.widget
-        item = canvas.find_withtag(Tkinter.CURRENT)[0]
+        item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
 
         items = (item,)
-        coords = canvas.coords(item)
+        coords = self.canvas.coords(item)
 
         bar = None
         if (self.bars.has_key(item)):
             bar = self.bars[item]
 
         if self.move_sets.has_key(item):
-            coords = canvas.coords(self.move_sets[item][0])
-            items = canvas.find_withtag(self.move_sets[item][1])
+            coords = self.canvas.coords(self.move_sets[item][0])
+            items = self.canvas.find_withtag(self.move_sets[item][1])
 
         minleft = self.bar_left - self.bar_delta
         maxleft = self.bar_left + self.bar_delta
@@ -346,30 +344,29 @@ class JR01Win:
                 bar.set_position(None)
 
         for item in items:
-            canvas.move(item, dx, 0)
+            self.canvas.move(item, dx, 0)
 
         self.last_x = self.last_x + dx
 
     def start_line(self, event):
-        canvas = event.widget
-        item = canvas.find_withtag(Tkinter.CURRENT)[0]
+        item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
         sourcedata = self.sourcedata[item]
-        self.set_cur_line(canvas,
-                          canvas.create_line(sourcedata[1], sourcedata[2],
-                                             event.x, event.y,
-                                             tags=self.linetag,
-                                             capstyle="round",
-                                             width=self.linewidth))
-        canvas.tag_bind(self.linetag, "<ButtonPress-1>", self.continue_line)
-        canvas.tag_bind(self.linetag, "<B1-Motion>", self.move_line)
-        canvas.tag_bind(self.linetag, "<ButtonRelease-1>", self.end_line)
+        self.set_cur_line(self.canvas.create_line(
+            sourcedata[1], sourcedata[2],
+            event.x, event.y,
+            tags=self.linetag,
+            capstyle="round",
+            width=self.linewidth))
+        self.canvas.tag_bind(self.linetag, "<ButtonPress-1>",
+                             self.continue_line)
+        self.canvas.tag_bind(self.linetag, "<B1-Motion>", self.move_line)
+        self.canvas.tag_bind(self.linetag, "<ButtonRelease-1>", self.end_line)
 
     def continue_line(self, event):
-        canvas = event.widget
-        self.set_cur_line(canvas, canvas.find_withtag(Tkinter.CURRENT)[0])
-        x0, y0, x1, y1 = canvas.coords(self.cur_line)
-        source = self.find_pointdata(canvas, x0, y0, self.sourcedata)
-        dest = self.find_pointdata(canvas, x1, y1, self.destdata)
+        self.set_cur_line(self.canvas.find_withtag(Tkinter.CURRENT)[0])
+        x0, y0, x1, y1 = self.canvas.coords(self.cur_line)
+        source = self.find_pointdata(x0, y0, self.sourcedata)
+        dest = self.find_pointdata(x1, y1, self.destdata)
         if source == None:
             raise self.InternalError, "no source item"
         if dest == None:
@@ -380,19 +377,18 @@ class JR01Win:
                              -1)
 
     def move_line(self, event):
-        canvas = event.widget
-        coords = canvas.coords(self.cur_line)
-        canvas.coords(self.cur_line, coords[0], coords[1], event.x, event.y)
+        coords = self.canvas.coords(self.cur_line)
+        self.canvas.coords(self.cur_line,
+                           coords[0], coords[1], event.x, event.y)
 
     def end_line(self, event):
-        canvas = event.widget
-        x0, y0, x1, y1 = canvas.coords(self.cur_line)
-        dest = self.find_pointdata(canvas, event.x, event.y, self.destdata)
+        x0, y0, x1, y1 = self.canvas.coords(self.cur_line)
+        dest = self.find_pointdata(event.x, event.y, self.destdata)
         if dest:
             destdata = self.destdata[dest]
-            canvas.coords(self.cur_line,
+            self.canvas.coords(self.cur_line,
                           x0, y0, destdata[1], destdata[2])
-            source = self.find_pointdata(canvas, x0, y0, self.sourcedata)
+            source = self.find_pointdata(x0, y0, self.sourcedata)
             if source == None:
                 raise self.InternalError, "no source item"
 
@@ -401,29 +397,30 @@ class JR01Win:
             self.state.set_patch(sourcenum, destnum, 1)
 
         else:
-            canvas.delete(self.cur_line)
+            self.canvas.delete(self.cur_line)
 
-        self.set_cur_line(canvas, None)
+        self.set_cur_line(None)
 
-    def find_pointdata(self, canvas, x, y, pointdata):
-        items = canvas.find_overlapping(x - self.ring_outer_radius,
-                                        y - self.ring_outer_radius,
-                                        x + self.ring_outer_radius,
-                                        y + self.ring_outer_radius)
+    def find_pointdata(self, x, y, pointdata):
+        items = self.canvas.find_overlapping(x - self.ring_outer_radius,
+                                             y - self.ring_outer_radius,
+                                             x + self.ring_outer_radius,
+                                             y + self.ring_outer_radius)
         result = None
         for item in items:
             if pointdata.has_key(item):
                 result = item
         return result
 
-    def set_cur_line(self, canvas, item):
+    def set_cur_line(self, item):
         if item != self.cur_line:
             if self.cur_line:
-                canvas.itemconfigure(self.cur_line, fill=self.linecolor)
+                self.canvas.itemconfigure(self.cur_line, fill=self.linecolor)
             self.cur_line = item
             if self.cur_line:
-                canvas.lift(self.cur_line)
-                canvas.itemconfigure(self.cur_line, fill=self.selectedlinecolor)
+                self.canvas.lift(self.cur_line)
+                self.canvas.itemconfigure(self.cur_line,
+                                          fill=self.selectedlinecolor)
 
 
 root = Tkinter.Tk()
