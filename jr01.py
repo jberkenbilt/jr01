@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.2 1999-07-10 16:47:17 ejb Exp $
+# $Id: jr01.py,v 1.3 1999-07-10 17:25:45 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -9,9 +9,10 @@
 import Tkinter;
 
 class JR01State:
-    def __init__(self, bars = 3, pegs = 7):
+    def __init__(self, bars = 3, pegs = 7, lights = 4):
         self.nbars = bars
         self.npegs = pegs
+        self.nlights = lights
 
     def set_peg_state(self, barnum, pegnum, position, state):
         print "set peg", (barnum, pegnum, position), "to state", state
@@ -26,6 +27,9 @@ class JR01Win:
     barshadow = "#0f1c12"
     bgcolor = "#81978a"
     markcolor = "#6f6764"
+    ringcolor = "#ffdc95"
+    redlightoff = "#4d3739"
+    greenlightoff = "#324033"
 
     # Static Geometry
     bar_hmargin = 60
@@ -35,12 +39,18 @@ class JR01Win:
     handle_width = 15
     vline_overhang = 20
     peg_gap = 60
-    first_peg = peg_gap + bar_hmargin
+    first_peg_x = peg_gap + bar_hmargin
     bar_delta = 12
     bar_sensitivity = 5 # snap to position when within bar_sensitivity pixels
-    bottom_height = 135 # XXX
     peg_outer_radius = 8
     peg_inner_radius = 3
+    ring_gap = 10
+    ring_outer_radius = 6
+    ring_inner_radius = 3
+    light_radius = 15
+    light_top_gap = 70
+    light_bottom_gap = 20
+    bottom_height = light_top_gap + 2 * light_radius + light_bottom_gap
 
     # State information
 
@@ -113,14 +123,23 @@ class JR01Win:
         self.vline_height = (self.bar_gap * (state.nbars - 1) +
                              self.bar_height +
                              2 * self.vline_overhang)
+        self.bar_ring_y = (self.vline_top + self.vline_height +
+                                self.ring_gap)
+        self.light_ring_y = self.bar_ring_y + self.light_top_gap
+        self.light_y = (self.light_ring_y + self.ring_gap +
+                        self.light_radius)
 
         bar_area_height = ((2 * self.bar_vmargin) +
                            ((state.nbars - 1) * self.bar_gap) +
                            self.bar_height)
-        self.peg_vcenter_offset = (self.bar_height / 2)
-
         width = self.bar_width + 2 * self.bar_hmargin
         height = bar_area_height + self.bottom_height
+
+        self.light_hgap = 0.9 * (width / (self.state.nlights + 1))
+        self.first_light_x = (width -
+                              (self.light_hgap * (self.state.nlights - 1))) / 2
+
+        self.peg_vcenter_offset = (self.bar_height / 2)
 
         frame = Tkinter.Frame(tk, background="black",
                               highlightthickness=20,
@@ -147,9 +166,18 @@ class JR01Win:
         canvas.tag_bind(self.movable, "<B1-Motion>", self.bar_move_cb)
         canvas.tag_bind(self.pegtag, "<ButtonPress-1>", self.toggle_peg)
 
+        for i in range(0, self.state.npegs):
+            x = self.first_peg_x + i * self.peg_gap
+            self.create_ring(canvas, x, self.bar_ring_y)
+
+        for i in range(0, self.state.nlights):
+            x = self.first_light_x + i * self.light_hgap
+            self.create_ring(canvas, x, self.light_ring_y)
+            self.create_light(canvas, i)
+
     def draw_static_marks(self, canvas):
         for i in range(0, self.state.npegs):
-            x = self.first_peg + i * self.peg_gap
+            x = self.first_peg_x + i * self.peg_gap
             canvas.create_line(x, self.vline_top,
                                x, self.vline_top + self.vline_height,
                                fill=self.markcolor)
@@ -178,13 +206,13 @@ class JR01Win:
         self.bars[handle] = bar
 
         for i in range(0, self.state.npegs):
-            self.create_peg(canvas, grouptag, top, main_item, barnum, i)
+            self.create_peg(canvas, grouptag, top, barnum, i)
 
-    def create_peg(self, canvas, grouptag, top, main_item, barnum, pegnum):
+    def create_peg(self, canvas, grouptag, top, barnum, pegnum):
 
         for dx in (-self.bar_delta, self.bar_delta):
 
-            peg_x = self.first_peg + pegnum * self.peg_gap
+            peg_x = self.first_peg_x + pegnum * self.peg_gap
             peg_y = top + self.peg_vcenter_offset
 
             outer_item = canvas.create_oval(
@@ -208,6 +236,32 @@ class JR01Win:
                            outer_item, inner_item)
             self.pegs[outer_item] = peg
             self.pegs[inner_item] = peg
+
+    def create_ring(self, canvas, x, y):
+        canvas.create_oval(x - self.ring_outer_radius,
+                           y - self.ring_outer_radius,
+                           x + self.ring_outer_radius,
+                           y + self.ring_outer_radius,
+                           fill=self.ringcolor)
+        canvas.create_oval(x - self.ring_inner_radius,
+                           y - self.ring_inner_radius,
+                           x + self.ring_inner_radius,
+                           y + self.ring_inner_radius,
+                           fill="black")
+
+    def create_light(self, canvas, lightnum):
+        x = self.first_light_x + lightnum * self.light_hgap
+        y = self.light_y
+        if lightnum == 0:
+            fill = self.redlightoff
+        else:
+            fill = self.greenlightoff
+        canvas.create_oval(x - self.light_radius,
+                           y - self.light_radius,
+                           x + self.light_radius,
+                           y + self.light_radius,
+                           fill=fill)
+
 
     def toggle_peg(self, event):
         canvas = event.widget
@@ -268,7 +322,7 @@ class JR01Win:
 root = Tkinter.Tk()
 root.title("JR01")
 root.resizable(0, 0)
-JR01Win(root, JR01State(3, 7))
+JR01Win(root, JR01State(3, 7, 4))
 try:
     root.mainloop()
 except KeyboardInterrupt:
