@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.9 1999-07-11 01:33:47 ejb Exp $
+# $Id: jr01.py,v 1.10 1999-07-11 01:47:30 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -9,6 +9,7 @@
 import Tkinter
 import tkFileDialog
 import tkMessageBox
+import tkSimpleDialog
 import math
 import re
 
@@ -127,6 +128,7 @@ class JR01Win:
     nlights_re = re.compile(r"^lights = (\d+)")
     pegs_re = re.compile(r"^pegs\[(\d+)\]\[(\d+)\]\[(\d+)\] = 1")
     patches_re = re.compile(r"^patches\[(\d+)\]\[(\d+)\] = 1")
+    params_re = re.compile(r"^(\d+) (\d+) (\d+)$")
 
     # Appearance
     background = "black"
@@ -285,11 +287,29 @@ class JR01Win:
         self.peg_table = {}
 
     def reset(self, state = None):
-        self.canvas.destroy()
+        if state == None:
+            while 1:
+                answer = tkSimpleDialog.askstring(
+                    "Parameters", "Enter three numbers: bars pegs lights")
+                if answer:
+                    m = self.params_re.match(answer)
+                    if m:
+                        state = JR01State(int(m.group(1)),
+                                          int(m.group(2)),
+                                          int(m.group(3)))
+                        break
+                    else:
+                        tkMessageBox.showerror("Invalid",
+                                               "Invalid input.")
+                else:
+                    return
+
         if state == None:
             state = JR01State(self.state.nbars,
                               self.state.npegs,
                               self.state.nlights)
+
+        self.canvas.destroy()
         self.init(state)
 
     def save(self):
@@ -713,7 +733,7 @@ class JR01Win:
 root = Tkinter.Tk()
 root.title("JR01")
 root.resizable(0, 0)
-JR01Win(root, JR01State(3, 7, 4))
+JR01Win(root, JR01State())
 try:
     root.mainloop()
 except KeyboardInterrupt:
