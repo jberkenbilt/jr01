@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.8 1999-07-11 00:27:35 ejb Exp $
+# $Id: jr01.py,v 1.9 1999-07-11 01:33:47 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
 
 import Tkinter
+import tkFileDialog
+import tkMessageBox
 import math
+import re
 
 class JR01State:
     debug = 0
@@ -42,13 +45,13 @@ class JR01State:
                 self.patches[column].append(0)
 
     def set_win(self, win):
-        self.win = win;
+        self.win = win
 
     def set_peg_state(self, barnum, pegnum, position, state):
         if self.debug:
             print "set peg", (barnum, pegnum, position), "to state", state
         self.pegs[barnum][pegnum][position] = state
-        self.win.update_peg(barnum,pegnum,position)
+        self.win.update_peg(barnum, pegnum, position, state)
 
     def set_bar_position(self, barnum, position):
         if self.debug:
@@ -90,10 +93,40 @@ class JR01State:
             
         return result
 
+    def save(self, file):
+        # Save overall parameters and peg and patch configurations only
+        file.write("JR01 version 1\n")
+        file.write("bars = " + `self.nbars` + "\n")
+        file.write("pegs = " + `self.npegs` + "\n")
+        file.write("lights = " + `self.nlights` + "\n")
+
+        for bar in range(0, self.nbars):
+            for peg in range(0, self.npegs):
+                for position in (0, 1):
+                    if self.pegs[bar][peg][position]:
+                        file.write("pegs[%d][%d][%d] = 1\n" %
+                                   (bar, peg, position))
+
+        for column in range(0, self.npegs):
+            for light in range(0, self.nlights):
+                if self.patches[column][light]:
+                    file.write("patches[%d][%d] = 1\n" % (column, light))
+
+
 class JR01Win:
     # Exceptions
     class InternalError(Exception):
         pass
+    class BadFile(Exception):
+        pass
+
+    # File loading
+    version = "JR01 version 1\n"
+    nbars_re = re.compile(r"^bars = (\d+)")
+    npegs_re = re.compile(r"^pegs = (\d+)")
+    nlights_re = re.compile(r"^lights = (\d+)")
+    pegs_re = re.compile(r"^pegs\[(\d+)\]\[(\d+)\]\[(\d+)\] = 1")
+    patches_re = re.compile(r"^patches\[(\d+)\]\[(\d+)\] = 1")
 
     # Appearance
     background = "black"
@@ -185,9 +218,8 @@ class JR01Win:
                                           fill=JR01Win.barshadow)
 
         def toggle(self):
-            self.state = 1 - self.state
             self.jr01_state.set_peg_state(self.barnum, self.pegnum,
-                                          self.position, self.state)
+                                          self.position, 1 - self.state)
             
     def __init__(self, tk, state):
 
@@ -199,14 +231,16 @@ class JR01Win:
 
         button_frame = Tkinter.Frame(tk)
 
-        open_button = Tkinter.Button(button_frame, text="open")
+        open_button = Tkinter.Button(button_frame, text="Open",
+                                     command=self.open)
         open_button.pack(side=Tkinter.LEFT)
-        save_button = Tkinter.Button(button_frame, text="save")
+        save_button = Tkinter.Button(button_frame, text="Save",
+                                     command=self.save)
         save_button.pack(side=Tkinter.LEFT)
-        reset_button = Tkinter.Button(button_frame, text="reset",
+        reset_button = Tkinter.Button(button_frame, text="Reset",
                                       command=self.reset)
         reset_button.pack(side=Tkinter.LEFT)
-        quit_button = Tkinter.Button(button_frame, text="quit",
+        quit_button = Tkinter.Button(button_frame, text="Quit",
                                      command=tk.quit)
         quit_button.pack(side=Tkinter.LEFT)
 
@@ -217,6 +251,12 @@ class JR01Win:
     def init(self, state):
         self.state = state
 
+        self.init_state()
+        self.compute_geometry()
+        self.create_canvas()
+        self.state.set_win(self)
+
+    def init_state(self):
         # Graphics state information
         
         # Each item with the "movable" tag is expected to have an
@@ -244,15 +284,77 @@ class JR01Win:
         # Maps (barnum, pegnum, position) to Peg object
         self.peg_table = {}
 
-        self.compute_geometry()
-        self.create_canvas()
-        self.state.set_win(self)
-
-    def reset(self):
+    def reset(self, state = None):
         self.canvas.destroy()
-        self.init(JR01State(self.state.nbars,
-                            self.state.npegs,
-                            self.state.nlights))
+        if state == None:
+            state = JR01State(self.state.nbars,
+                              self.state.npegs,
+                              self.state.nlights)
+        self.init(state)
+
+    def save(self):
+        filename = tkFileDialog.asksaveasfilename(
+            defaultextension=".jr01",
+            filetypes=(("JR01 Files", "*.jr01"),
+                       ("All Files", "*")))
+        if filename:
+            file = open(filename, "w")
+            self.state.save(file)
+            file.close()
+
+    def open(self):
+        filename = tkFileDialog.askopenfilename(
+            defaultextension=".jr01",
+            filetypes=(("JR01 Files", "*.jr01"),
+                       ("All Files", "*")))
+        if filename:
+            file = open(filename, "r")
+            lines = file.readlines()
+            file.close()
+            if lines[0] == self.version:
+                nbars = npegs = nlights = None
+                pegs = []
+                patches = []
+                try:
+                    for line in lines:
+                        if line == self.version:
+                            pass
+                        elif self.nbars_re.match(line):
+                            m = self.nbars_re.match(line)
+                            nbars = int(m.group(1))
+                        elif self.npegs_re.match(line):
+                            m = self.npegs_re.match(line)
+                            npegs = int(m.group(1))
+                        elif self.nlights_re.match(line):
+                            m = self.nlights_re.match(line)
+                            nlights = int(m.group(1))
+                        elif self.pegs_re.match(line):
+                            m = self.pegs_re.match(line)
+                            pegs.append((int(m.group(1)),
+                                         int(m.group(2)),
+                                         int(m.group(3))))
+                        elif self.patches_re.match(line):
+                            m = self.patches_re.match(line)
+                            patches.append((int(m.group(1)),
+                                            int(m.group(2))))
+                        else:
+                            raise self.BadFile, "Invalid JR01 file"
+                    if not (nbars and npegs and nlights):
+                        raise self.Badfile, ("nbars, npegs, and nlights " +
+                                             "must all be defined")
+                except self.BadFile, msg:
+                    tkMessageBox.showerror("Bad File", msg)
+
+                # Good file.  Reset state and load configuration.
+                self.reset(JR01State(nbars, npegs, nlights))
+                for peg in pegs:
+                    self.state.set_peg_state(peg[0], peg[1], peg[2], 1)
+                for patch in patches:
+                    self.state.set_patch(patch[0], patch[1], 1)
+
+            else:
+                tkMessageBox.showerror("Bad File",
+                                       "File does not look like a JR01 file")
 
     def create_canvas(self):
         self.canvas = Tkinter.Canvas(self.frame,
@@ -572,8 +674,10 @@ class JR01Win:
                 self.canvas.itemconfigure(self.cur_line,
                                           fill=self.selectedlinecolor)
 
-    def update_peg(self, barnum, pegnum, position):
-        self.peg_table[(barnum,pegnum,position)].update()
+    def update_peg(self, barnum, pegnum, position, state):
+        peg = self.peg_table[(barnum,pegnum,position)]
+        peg.state = state
+        peg.update()
 
     def draw_patch_line(self, source, dest):
         x0, y0 = self.source_table[source]
