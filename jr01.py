@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.7 1999-07-10 21:47:30 ejb Exp $
+# $Id: jr01.py,v 1.8 1999-07-11 00:27:35 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -34,28 +34,35 @@ class JR01State:
         for bar in range(0, bars):
             self.bars.append(None)
 
-        # patches[column][light] == count
+        # patches[column][light] == patch_state
         self.patches = []
         for column in range(0, pegs):
             self.patches.append([])
             for light in range(0, lights):
                 self.patches[column].append(0)
 
+    def set_win(self, win):
+        self.win = win;
+
     def set_peg_state(self, barnum, pegnum, position, state):
         if self.debug:
             print "set peg", (barnum, pegnum, position), "to state", state
         self.pegs[barnum][pegnum][position] = state
+        self.win.update_peg(barnum,pegnum,position)
 
     def set_bar_position(self, barnum, position):
         if self.debug:
             print "set bar", barnum, "to position", position
         self.bars[barnum] = position
 
-    def set_patch(self, source, dest, count):
+    def set_patch(self, source, dest, state):
         if self.debug:
-            print "increasing connection count from column",
-            print source, "to light", dest, "by", count
-        self.patches[source][dest] = self.patches[source][dest] + count
+            print "setting patch from column",
+            print source, "to light", dest, "to", state
+        if self.patches[source][dest] != state:
+            self.patches[source][dest] = state
+            if state:
+                self.win.draw_patch_line(source, dest)
 
     def compute(self):
         # Initially, all lights are off.
@@ -131,22 +138,15 @@ class JR01Win:
     compute_x_from_right = 35
     compute_y_above_bottom = 35
 
-    # State information
-
-    # Each item with the "movable" tag is expected to have an entry in
-    # move_sets.  The key is the item number, and the value is a
-    # 2-tuple whose first value is the "main item" in the move set and
-    # whose second item is a tag that identifies all items in the move
-    # set.  The main item is the item whose coordinates are used to
-    # enforce any constraints that may be imposed upon moving the
-    # item.  The effect is that all items in the same move_set are
-    # always moved together.
-    movable = "movable"
-    move_sets = {}
-
-    # "bars" maps a bar item to its corresponding Bar object
+    movabletag = "movable"
     bartag = "bar"
-    bars = {}
+    pegtag = "peg"
+    linetag = "line"
+    sourcetag = "source"
+    desttag = "dest"
+    computetag = "compute"
+
+    cur_line = None
 
     class Bar:
         def __init__(self, jr01_state, barnum):
@@ -159,12 +159,9 @@ class JR01Win:
                 self.position = position
                 self.jr01_state.set_bar_position(self.barnum, position)
 
-    # "pegs" maps a peg item to its corresponding Peg object
-    pegtag = "peg"
-    pegs = {}
 
     class Peg:
-        def __init__(self, jr01_state, barnum, pegnum, offset, canvas,
+        def __init__(self, jr01_state, barnum, pegnum, position, canvas,
                      outer_item, inner_item):
             self.jr01_state = jr01_state
             self.barnum = barnum
@@ -172,14 +169,10 @@ class JR01Win:
             self.canvas = canvas
             self.outer_item = outer_item
             self.inner_item = inner_item
-            if (offset > 0):
-                self.position = 1
-            else:
-                self.position = 0
+            self.position = position
             self.state = 0
 
-        def toggle(self):
-            self.state = 1 - self.state
+        def update(self):
             if self.state:
                 self.canvas.itemconfigure(self.outer_item,
                                           fill=JR01Win.pegcolor)
@@ -190,71 +183,85 @@ class JR01Win:
                                           fill=JR01Win.barcolor)
                 self.canvas.itemconfigure(self.inner_item,
                                           fill=JR01Win.barshadow)
+
+        def toggle(self):
+            self.state = 1 - self.state
             self.jr01_state.set_peg_state(self.barnum, self.pegnum,
                                           self.position, self.state)
             
-    # "sourcedata" and "destdata" store information for line drawing
-    linetag = "line"
-    cur_line = None
-    sourcetag = "source"
-    sourcedata = {}
-    desttag = "dest"
-    destdata = {}
-
-    computetag = "compute"
-
-    lights = []
-
     def __init__(self, tk, state):
+
+        self.frame = Tkinter.Frame(tk, background=self.background,
+                                   highlightthickness=20,
+                                   highlightcolor=self.barcolor,
+                                   highlightbackground=self.barcolor)
+        self.frame.pack()
+
+        button_frame = Tkinter.Frame(tk)
+
+        open_button = Tkinter.Button(button_frame, text="open")
+        open_button.pack(side=Tkinter.LEFT)
+        save_button = Tkinter.Button(button_frame, text="save")
+        save_button.pack(side=Tkinter.LEFT)
+        reset_button = Tkinter.Button(button_frame, text="reset",
+                                      command=self.reset)
+        reset_button.pack(side=Tkinter.LEFT)
+        quit_button = Tkinter.Button(button_frame, text="quit",
+                                     command=tk.quit)
+        quit_button.pack(side=Tkinter.LEFT)
+
+        button_frame.pack()
+
+        self.init(state)
+
+    def init(self, state):
         self.state = state
 
-        # Compute Geometry
-        self.bar_width = (state.npegs + 1) * self.peg_gap
-        self.bar_left = self.bar_hmargin
-        self.bar_right = self.bar_hmargin + self.bar_width
-        self.first_bar_top = self.bar_vmargin
+        # Graphics state information
+        
+        # Each item with the "movable" tag is expected to have an
+        # entry in move_sets.  The key is the item number, and the
+        # value is a 2-tuple whose first value is the "main item" in
+        # the move set and whose second item is a tag that identifies
+        # all items in the move set.  The main item is the item whose
+        # coordinates are used to enforce any constraints that may be
+        # imposed upon moving the item.  The effect is that all items
+        # in the same move_set are always moved together.
+        self.move_sets = {}
+        # maps a bar item to its corresponding Bar object
+        self.bars = {}
+        # maps a peg item to its corresponding Peg object
+        self.pegs = {}
+        # "sourcedata" and "destdata" store information for line drawing
+        self.sourcedata = {}
+        self.destdata = {}
+        self.lights = []
 
-        self.vline_top = self.bar_vmargin - self.vline_overhang
-        self.vline_height = (self.bar_gap * (state.nbars - 1) +
-                             self.bar_height +
-                             2 * self.vline_overhang)
-        self.bar_ring_y = (self.vline_top + self.vline_height +
-                                self.ring_gap)
-        self.light_ring_y = self.bar_ring_y + self.light_top_gap
-        self.light_y = (self.light_ring_y + self.ring_gap +
-                        self.light_radius)
+        # Maps source column number to coordinates
+        self.source_table = {}
+        # Maps dest light number to coordinates
+        self.dest_table = {}
+        # Maps (barnum, pegnum, position) to Peg object
+        self.peg_table = {}
 
-        bar_area_height = ((2 * self.bar_vmargin) +
-                           ((state.nbars - 1) * self.bar_gap) +
-                           self.bar_height)
-        width = self.bar_width + 2 * self.bar_hmargin
-        height = bar_area_height + self.bottom_height
+        self.compute_geometry()
+        self.create_canvas()
+        self.state.set_win(self)
 
-        self.compute_x = width - self.compute_x_from_right
-        self.compute_y = height - self.compute_y_above_bottom
+    def reset(self):
+        self.canvas.destroy()
+        self.init(JR01State(self.state.nbars,
+                            self.state.npegs,
+                            self.state.nlights))
 
-        self.light_hgap = 0.9 * (width / (self.state.nlights + 1))
-        self.first_light_x = (width -
-                              (self.light_hgap * (self.state.nlights - 1))) / 2
-
-        self.peg_vcenter_offset = (self.bar_height / 2)
-
-        frame = Tkinter.Frame(tk, background=self.background,
-                              highlightthickness=20,
-                              highlightcolor=self.barcolor,
-                              highlightbackground=self.barcolor)
-        frame.pack()
-
-        quit_button = Tkinter.Button(frame, text="quit",
-                                     command=frame.quit)
-        quit_button.grid(row=1, col=0)
-
-        self.canvas = Tkinter.Canvas(frame, width=width, height=height,
+    def create_canvas(self):
+        self.canvas = Tkinter.Canvas(self.frame,
+                                     width=self.width, height=self.height,
                                      background=self.bgcolor,
                                      borderwidth=0, highlightthickness=0,
                                      cursor="hand2")
-        self.canvas.grid(row=0, col=0)
-        
+        self.canvas.pack()
+
         self.draw_static_marks()
 
         for i in range(0, self.state.nbars):
@@ -264,13 +271,15 @@ class JR01Win:
             x = self.first_peg_x + i * self.peg_gap
             self.create_ring(i, x, self.bar_ring_y,
                              self.ring_outer_radius,
-                             self.sourcedata, self.sourcetag)
+                             self.sourcedata, self.source_table,
+                             self.sourcetag)
 
         for i in range(0, self.state.nlights):
             x = self.first_light_x + i * self.light_hgap
             self.create_ring(i, x, self.light_ring_y,
                              -self.ring_outer_radius,
-                             self.destdata, self.desttag)
+                             self.destdata, self.dest_table,
+                             self.desttag)
             self.create_light(i)
         self.turn_lights_off()
 
@@ -290,16 +299,53 @@ class JR01Win:
             pentagon, tag=self.computetag,
             fill=self.compute_off_color)
 
-        self.canvas.tag_bind(self.movable, "<ButtonPress-1>", self.bar_set_cb)
-        self.canvas.tag_bind(self.movable, "<B1-Motion>", self.bar_move_cb)
-        self.canvas.tag_bind(self.pegtag, "<ButtonPress-1>", self.toggle_peg)
-        self.canvas.tag_bind(self.sourcetag, "<ButtonPress-1>", self.start_line)
-        self.canvas.tag_bind(self.sourcetag, "<B1-Motion>", self.move_line)
-        self.canvas.tag_bind(self.sourcetag, "<ButtonRelease-1>", self.end_line)
+        self.canvas.tag_bind(self.movabletag, "<ButtonPress-1>",
+                             self.bar_set_cb)
+        self.canvas.tag_bind(self.movabletag, "<B1-Motion>",
+                             self.bar_move_cb)
+        self.canvas.tag_bind(self.pegtag, "<ButtonPress-1>",
+                             self.toggle_peg)
+        self.canvas.tag_bind(self.sourcetag, "<ButtonPress-1>",
+                             self.start_line)
+        self.canvas.tag_bind(self.sourcetag, "<B1-Motion>",
+                             self.move_line)
+        self.canvas.tag_bind(self.sourcetag, "<ButtonRelease-1>",
+                             self.end_line)
         self.canvas.tag_bind(self.computetag, "<ButtonPress-1>",
                              self.compute_down)
         self.canvas.tag_bind(self.computetag, "<ButtonRelease-1>",
                              self.compute_up)
+
+    def compute_geometry(self):
+        self.bar_width = (self.state.npegs + 1) * self.peg_gap
+        self.bar_left = self.bar_hmargin
+        self.bar_right = self.bar_hmargin + self.bar_width
+        self.first_bar_top = self.bar_vmargin
+
+        self.vline_top = self.bar_vmargin - self.vline_overhang
+        self.vline_height = (self.bar_gap * (self.state.nbars - 1) +
+                             self.bar_height +
+                             2 * self.vline_overhang)
+        self.bar_ring_y = (self.vline_top + self.vline_height +
+                                self.ring_gap)
+        self.light_ring_y = self.bar_ring_y + self.light_top_gap
+        self.light_y = (self.light_ring_y + self.ring_gap +
+                        self.light_radius)
+
+        bar_area_height = ((2 * self.bar_vmargin) +
+                           ((self.state.nbars - 1) * self.bar_gap) +
+                           self.bar_height)
+        self.width = self.bar_width + 2 * self.bar_hmargin
+        self.height = bar_area_height + self.bottom_height
+
+        self.compute_x = self.width - self.compute_x_from_right
+        self.compute_y = self.height - self.compute_y_above_bottom
+
+        self.light_hgap = 0.9 * (self.width / (self.state.nlights + 1))
+        self.first_light_x = (self.width -
+                              (self.light_hgap * (self.state.nlights - 1))) / 2
+
+        self.peg_vcenter_offset = (self.bar_height / 2)
 
     def draw_static_marks(self):
         for i in range(0, self.state.npegs):
@@ -314,13 +360,13 @@ class JR01Win:
         main_item = self.canvas.create_rectangle(
             self.bar_left, top,
             self.bar_right, self.bar_height + top,
-            tags = (grouptag, self.movable),
+            tags = (grouptag, self.movabletag),
             width = 2, fill = self.barcolor)
         self.move_sets[main_item] = (main_item, grouptag)
         handle = self.canvas.create_rectangle(
             self.bar_right - self.handle_width, top + 2,
             self.bar_right - 4, top + self.bar_height - 4,
-            tags = (grouptag, self.movable),
+            tags = (grouptag, self.movabletag),
             width = 0, fill=self.barshadow)
         self.move_sets[handle] = (main_item, grouptag)
 
@@ -355,12 +401,18 @@ class JR01Win:
                 tags = (grouptag, self.pegtag),
                 fill=self.barshadow)
 
-            peg = self.Peg(self.state, barnum, pegnum, dx, self.canvas,
+            if (dx > 0):
+                position = 1
+            else:
+                position = 0
+
+            peg = self.Peg(self.state, barnum, pegnum, position, self.canvas,
                            outer_item, inner_item)
             self.pegs[outer_item] = peg
             self.pegs[inner_item] = peg
+            self.peg_table[(barnum, pegnum, position)] = peg
 
-    def create_ring(self, ringnum, x, y, voffset, pointdata, tag):
+    def create_ring(self, ringnum, x, y, voffset, pointdata, point_table, tag):
         data = (ringnum, x, y + voffset)
         item = self.canvas.create_oval(
             x - self.ring_outer_radius,
@@ -378,6 +430,7 @@ class JR01Win:
             tags=tag,
             fill=self.ringholecolor)
         pointdata[item] = data
+        point_table[ringnum] = data[1:3]
 
     def create_light(self, lightnum):
         x = self.first_light_x + lightnum * self.light_hgap
@@ -445,12 +498,9 @@ class JR01Win:
     def start_line(self, event):
         item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
         sourcedata = self.sourcedata[item]
-        self.set_cur_line(self.canvas.create_line(
+        self.set_cur_line(self.create_patch_line(
             sourcedata[1], sourcedata[2],
-            event.x, event.y,
-            tags=self.linetag,
-            capstyle="round",
-            width=self.linewidth))
+            event.x, event.y, self.selectedlinecolor))
         self.canvas.tag_bind(self.linetag, "<ButtonPress-1>",
                              self.continue_line)
         self.canvas.tag_bind(self.linetag, "<B1-Motion>", self.move_line)
@@ -467,8 +517,7 @@ class JR01Win:
             raise self.InternalError, "no dest item"
         self.move_line(event)
         self.state.set_patch(self.sourcedata[source][0],
-                             self.destdata[dest][0],
-                             -1)
+                             self.destdata[dest][0], 0)
 
     def move_line(self, event):
         coords = self.canvas.coords(self.cur_line)
@@ -481,18 +530,17 @@ class JR01Win:
         if dest:
             destdata = self.destdata[dest]
             self.canvas.coords(self.cur_line,
-                          x0, y0, destdata[1], destdata[2])
+                               x0, y0, destdata[1], destdata[2])
             source = self.find_pointdata(x0, y0, self.sourcedata)
             if source == None:
                 raise self.InternalError, "no source item"
 
             sourcenum = self.sourcedata[source][0]
             destnum = self.destdata[dest][0]
+            # This routine cauase a new line to be drawn
             self.state.set_patch(sourcenum, destnum, 1)
 
-        else:
-            self.canvas.delete(self.cur_line)
-
+        self.canvas.delete(self.cur_line)
         self.set_cur_line(None)
 
     def compute_down(self, event):
@@ -518,13 +566,28 @@ class JR01Win:
 
     def set_cur_line(self, item):
         if item != self.cur_line:
-            if self.cur_line:
-                self.canvas.itemconfigure(self.cur_line, fill=self.linecolor)
             self.cur_line = item
             if self.cur_line:
                 self.canvas.lift(self.cur_line)
                 self.canvas.itemconfigure(self.cur_line,
                                           fill=self.selectedlinecolor)
+
+    def update_peg(self, barnum, pegnum, position):
+        self.peg_table[(barnum,pegnum,position)].update()
+
+    def draw_patch_line(self, source, dest):
+        x0, y0 = self.source_table[source]
+        x1, y1 = self.dest_table[dest]
+        self.create_patch_line(x0, y0, x1, y1, self.linecolor)
+        pass
+
+    def create_patch_line(self, x0, y0, x1, y1, fill):
+        return self.canvas.create_line(
+            x0, y0, x1, y1,
+            tags=self.linetag,
+            capstyle="round",
+            width=self.linewidth,
+            fill=fill)
 
     def set_lights(self, lightdata):
         for i in range(0, len(lightdata)):
@@ -542,7 +605,7 @@ class JR01Win:
 
     def turn_lights_off(self):
         self.set_lights([0] * self.state.nlights)
-
+        
 root = Tkinter.Tk()
 root.title("JR01")
 root.resizable(0, 0)
@@ -551,4 +614,3 @@ try:
     root.mainloop()
 except KeyboardInterrupt:
     pass
-
