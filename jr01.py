@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.6 1999-07-10 21:16:59 ejb Exp $
+# $Id: jr01.py,v 1.7 1999-07-10 21:47:30 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -10,27 +10,77 @@ import Tkinter
 import math
 
 class JR01State:
+    debug = 0
+
     def __init__(self, bars = 3, pegs = 7, lights = 4):
+        if lights > pegs:
+            lights = pegs
+
         self.nbars = bars
         self.npegs = pegs
         self.nlights = lights
-        if self.nlights > self.npegs:
-            self.nlights = self.npegs
+
+        # pegs[barnum][pegnum][position] == peg_state
+        self.pegs = []
+        for bar in range(0, bars):
+            self.pegs.append([])
+            for peg in range(0, pegs):
+                self.pegs[bar].append([])
+                for position in (0, 1):
+                    self.pegs[bar][peg].append(0)
+
+        # bars[barnum] == position
+        self.bars = []
+        for bar in range(0, bars):
+            self.bars.append(None)
+
+        # patches[column][light] == count
+        self.patches = []
+        for column in range(0, pegs):
+            self.patches.append([])
+            for light in range(0, lights):
+                self.patches[column].append(0)
 
     def set_peg_state(self, barnum, pegnum, position, state):
-        print "set peg", (barnum, pegnum, position), "to state", state
+        if self.debug:
+            print "set peg", (barnum, pegnum, position), "to state", state
+        self.pegs[barnum][pegnum][position] = state
 
     def set_bar_position(self, barnum, position):
-        print "set bar", barnum, "to position", position
+        if self.debug:
+            print "set bar", barnum, "to position", position
+        self.bars[barnum] = position
 
     def set_patch(self, source, dest, count):
-        print "increasing connection count from column", source, "to light", dest, "by", count
+        if self.debug:
+            print "increasing connection count from column",
+            print source, "to light", dest, "by", count
+        self.patches[source][dest] = self.patches[source][dest] + count
 
     def compute(self):
-        print "computing"
-        result = []
-        for i in range(0, self.nlights):
-            result.append(1)
+        # Initially, all lights are off.
+        result = self.nlights * [0]
+
+        if None not in self.bars:
+            # Assume all columns are active.  "And" column with the peg
+            # value for each column.
+            for column in range(0, self.npegs):
+                active = 1
+                for bar in range(0, self.nbars):
+                    position = self.bars[bar]
+                    val = self.pegs[bar][column][position]
+                    if self.debug:
+                        print "column", column, "bar", bar,
+                        print "position", position, "val", val
+                    active = active & val
+                if self.debug:
+                    print "column", column, "active", active
+                if active:
+                    # Turn on any lights connected to this column
+                    for light in range(0, self.nlights):
+                        if self.patches[column][light]:
+                            result[light] = 1
+            
         return result
 
 class JR01Win:
@@ -122,7 +172,10 @@ class JR01Win:
             self.canvas = canvas
             self.outer_item = outer_item
             self.inner_item = inner_item
-            self.position = (offset > 0)
+            if (offset > 0):
+                self.position = 1
+            else:
+                self.position = 0
             self.state = 0
 
         def toggle(self):
@@ -378,9 +431,9 @@ class JR01Win:
 
         if bar:
             if newleft == minleft:
-                bar.set_position(0)
-            elif newleft == maxleft:
                 bar.set_position(1)
+            elif newleft == maxleft:
+                bar.set_position(0)
             else:
                 bar.set_position(None)
 
@@ -488,15 +541,7 @@ class JR01Win:
             self.canvas.itemconfigure(self.lights[i], fill=fill)
 
     def turn_lights_off(self):
-        first = 1
-        for light in self.lights:
-            if first:
-                first = 0
-                fill = self.redlightoff
-            else:
-                fill = self.greenlightoff
-            self.canvas.itemconfigure(light, fill=fill)
-
+        self.set_lights([0] * self.state.nlights)
 
 root = Tkinter.Tk()
 root.title("JR01")
