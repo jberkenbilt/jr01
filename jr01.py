@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*-python-*-
 #
-# $Id: jr01.py,v 1.1 1999-07-10 16:08:08 ejb Exp $
+# $Id: jr01.py,v 1.2 1999-07-10 16:47:17 ejb Exp $
 # $Source: /work/cvs/jr01/jr01.py,v $
 # $Author: ejb $
 #
@@ -9,9 +9,16 @@
 import Tkinter;
 
 class JR01State:
-    nbars = 3
-    npegs = 7
-    pass
+    def __init__(self, bars = 3, pegs = 7):
+        self.nbars = bars
+        self.npegs = pegs
+
+    def set_peg_state(self, barnum, pegnum, position, state):
+        print "set peg", (barnum, pegnum, position), "to state", state
+
+    def set_bar_position(self, barnum, position):
+        print "set bar", barnum, "to position", position
+
 
 class JR01Win:
     # Appearance
@@ -25,6 +32,7 @@ class JR01Win:
     bar_vmargin = 45
     bar_height = 35
     bar_gap = 70
+    handle_width = 15
     vline_overhang = 20
     peg_gap = 60
     first_peg = peg_gap + bar_hmargin
@@ -33,24 +41,6 @@ class JR01Win:
     bottom_height = 135 # XXX
     peg_outer_radius = 8
     peg_inner_radius = 3
-
-    # Computed Geometry
-    bar_width = (JR01State.npegs + 1) * peg_gap
-    width = bar_width + 2 * bar_hmargin
-    bar_left = bar_hmargin
-    bar_right = bar_hmargin + bar_width
-    first_bar_top = bar_vmargin
-
-    vline_top = bar_vmargin - vline_overhang
-    vline_height = (bar_gap * (JR01State.nbars - 1) + bar_height +
-                    2 * vline_overhang)
-
-    bar_area_height = ((2 * bar_vmargin) +
-                       ((JR01State.nbars - 1) * bar_gap) +
-                       bar_height)
-    height = bar_area_height + bottom_height
-    peg_vcenter_offset = (bar_height / 2)
-    peg_inner_top_offset = (bar_height / 2)
 
     # State information
 
@@ -65,11 +55,26 @@ class JR01Win:
     movable = "movable"
     move_sets = {}
 
-    # Pegstates maps a peg item to its corresponding Pegstate object
-    pegtag = "peg"
-    pegstates = {}
+    # "bars" maps a bar item to its corresponding Bar object
+    bartag = "bar"
+    bars = {}
 
-    class Pegstate:
+    class Bar:
+        def __init__(self, jr01_state, barnum):
+            self.jr01_state = jr01_state
+            self.barnum = barnum
+            self.position = None
+
+        def set_position(self, position):
+            if self.position != position:
+                self.position = position
+                self.jr01_state.set_bar_position(self.barnum, position)
+
+    # "pegs" maps a peg item to its corresponding Peg object
+    pegtag = "peg"
+    pegs = {}
+
+    class Peg:
         def __init__(self, jr01_state, barnum, pegnum, offset, canvas,
                      outer_item, inner_item):
             self.jr01_state = jr01_state
@@ -91,10 +96,32 @@ class JR01Win:
                                           fill=JR01Win.barcolor)
                 self.canvas.itemconfigure(self.inner_item,
                                           fill=JR01Win.barshadow)
-
+            self.jr01_state.set_peg_state(self.barnum, self.pegnum,
+                                          self.position, self.state)
             
 
     def __init__(self, tk, state):
+        self.state = state
+
+        # Compute Geometry
+        self.bar_width = (state.npegs + 1) * self.peg_gap
+        self.bar_left = self.bar_hmargin
+        self.bar_right = self.bar_hmargin + self.bar_width
+        self.first_bar_top = self.bar_vmargin
+
+        self.vline_top = self.bar_vmargin - self.vline_overhang
+        self.vline_height = (self.bar_gap * (state.nbars - 1) +
+                             self.bar_height +
+                             2 * self.vline_overhang)
+
+        bar_area_height = ((2 * self.bar_vmargin) +
+                           ((state.nbars - 1) * self.bar_gap) +
+                           self.bar_height)
+        self.peg_vcenter_offset = (self.bar_height / 2)
+
+        width = self.bar_width + 2 * self.bar_hmargin
+        height = bar_area_height + self.bottom_height
+
         frame = Tkinter.Frame(tk, background="black",
                               highlightthickness=20,
                               highlightcolor=self.barcolor,
@@ -105,7 +132,7 @@ class JR01Win:
                                      command=frame.quit)
         quit_button.grid(row=1, col=0)
 
-        canvas = Tkinter.Canvas(frame, width=self.width, height=self.height,
+        canvas = Tkinter.Canvas(frame, width=width, height=height,
                                 background=self.bgcolor,
                                 borderwidth=0, highlightthickness=0,
                                 cursor="hand2")
@@ -113,7 +140,7 @@ class JR01Win:
         
         self.draw_static_marks(canvas)
 
-        for i in range(0, JR01State.nbars):
+        for i in range(0, self.state.nbars):
             self.create_bar(canvas, i, self.first_bar_top + i * self.bar_gap)
 
         canvas.tag_bind(self.movable, "<ButtonPress-1>", self.bar_set_cb)
@@ -121,7 +148,7 @@ class JR01Win:
         canvas.tag_bind(self.pegtag, "<ButtonPress-1>", self.toggle_peg)
 
     def draw_static_marks(self, canvas):
-        for i in range(0, JR01State.npegs):
+        for i in range(0, self.state.npegs):
             x = self.first_peg + i * self.peg_gap
             canvas.create_line(x, self.vline_top,
                                x, self.vline_top + self.vline_height,
@@ -129,7 +156,7 @@ class JR01Win:
 
 
     def create_bar(self, canvas, barnum, top):
-        grouptag = "bar-" + `barnum`
+        grouptag = self.bartag + "-" + `barnum`
         main_item = canvas.create_rectangle(self.bar_left,
                                             top,
                                             self.bar_right,
@@ -138,15 +165,19 @@ class JR01Win:
                                             width = 2,
                                             fill = self.barcolor)
         self.move_sets[main_item] = (main_item, grouptag)
-        item = canvas.create_rectangle(self.bar_right - 15,
+        handle = canvas.create_rectangle(self.bar_right - self.handle_width,
                                        top + 2,
                                        self.bar_right - 4,
                                        top + self.bar_height - 4,
                                        tags = (grouptag, self.movable),
                                        width = 0, fill=self.barshadow)
-        self.move_sets[item] = (main_item, grouptag)
+        self.move_sets[handle] = (main_item, grouptag)
 
-        for i in range(0, JR01State.npegs):
+        bar = self.Bar(self.state, barnum)
+        self.bars[main_item] = bar
+        self.bars[handle] = bar
+
+        for i in range(0, self.state.npegs):
             self.create_peg(canvas, grouptag, top, main_item, barnum, i)
 
     def create_peg(self, canvas, grouptag, top, main_item, barnum, pegnum):
@@ -173,31 +204,17 @@ class JR01Win:
                 tags = (grouptag, self.pegtag),
                 fill=self.barshadow)
 
-            pegstate = self.Pegstate(state, barnum, pegnum, dx, canvas,
-                                     outer_item, inner_item)
-            self.pegstates[outer_item] = pegstate
-            self.pegstates[inner_item] = pegstate
-
-#        self.sets[item] = "set-2"
-#        item = canvas.create_oval(170, 260, 230, 320,
-#                                  tags=("set-2", "toggleable"))
-#        self.toggle_states[item] = [1, "#0a0", "#060"];
-#        item = canvas.create_oval(190, 280, 210, 300,
-#                                  tags="set-2", fill="black")
-#
-#        canvas.tag_bind("toggleable", "<Button-1>", self.toggle_state)
-#
-#        for item in canvas.find_withtag("toggleable"):
-#            data = self.toggle_states[item]
-#            index = data[0]
-#            canvas.itemconfigure(item, fill=data[index])
+            peg = self.Peg(self.state, barnum, pegnum, dx, canvas,
+                           outer_item, inner_item)
+            self.pegs[outer_item] = peg
+            self.pegs[inner_item] = peg
 
     def toggle_peg(self, event):
         canvas = event.widget
         item = canvas.find_withtag(Tkinter.CURRENT)[0]
-        if self.pegstates.has_key(item):
-            pegstate = self.pegstates[item]
-            pegstate.toggle()
+        if self.pegs.has_key(item):
+            peg = self.pegs[item]
+            peg.toggle()
 
     def bar_set_cb(self, event):
         self.last_x = event.x
@@ -208,6 +225,10 @@ class JR01Win:
 
         items = (item,)
         coords = canvas.coords(item)
+
+        bar = None
+        if (self.bars.has_key(item)):
+            bar = self.bars[item]
 
         if self.move_sets.has_key(item):
             coords = canvas.coords(self.move_sets[item][0])
@@ -229,6 +250,15 @@ class JR01Win:
               self.bar_left + self.bar_sensitivity):
             dx = self.bar_left - coords[0]
 
+        newleft = coords[0] + dx
+
+        if bar:
+            if newleft == minleft:
+                bar.set_position(0)
+            elif newleft == maxleft:
+                bar.set_position(1)
+            else:
+                bar.set_position(None)
 
         for item in items:
             canvas.move(item, dx, 0)
@@ -238,8 +268,7 @@ class JR01Win:
 root = Tkinter.Tk()
 root.title("JR01")
 root.resizable(0, 0)
-state = JR01State()
-JR01Win(root, state)
+JR01Win(root, JR01State(3, 7))
 try:
     root.mainloop()
 except KeyboardInterrupt:
