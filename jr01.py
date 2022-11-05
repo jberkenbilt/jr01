@@ -1,11 +1,4 @@
 #!/usr/bin/env python
-# -*-python-*-
-#
-# $Id: jr01.py,v 1.12 1999-07-11 14:30:47 ejb Exp $
-# $Source: /work/cvs/jr01/jr01.py,v $
-# $Author: ejb $
-#
-
 import Tkinter
 import tkFileDialog
 import tkMessageBox
