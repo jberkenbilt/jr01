@@ -1,15 +1,14 @@
-#!/usr/bin/env python
-import Tkinter
-import tkFileDialog
-import tkMessageBox
-import tkSimpleDialog
+#!/usr/bin/env python3
+import tkinter
+import tkinter.filedialog
 import math
 import re
+
 
 class JR01State:
     debug = 0
 
-    def __init__(self, bars = 3, pegs = 7, lights = 4):
+    def __init__(self, bars=3, pegs=7, lights=4):
         if lights > pegs:
             lights = pegs
 
@@ -43,19 +42,19 @@ class JR01State:
 
     def set_peg_state(self, barnum, pegnum, position, state):
         if self.debug:
-            print "set peg", (barnum, pegnum, position), "to state", state
+            print("set peg", (barnum, pegnum, position), "to state", state)
         self.pegs[barnum][pegnum][position] = state
         self.win.update_peg(barnum, pegnum, position, state)
 
     def set_bar_position(self, barnum, position):
         if self.debug:
-            print "set bar", barnum, "to position", position
+            print("set bar", barnum, "to position", position)
         self.bars[barnum] = position
 
     def set_patch(self, source, dest, state):
         if self.debug:
-            print "setting patch from column",
-            print source, "to light", dest, "to", state
+            print("setting patch from column",)
+            print(source, "to light", dest, "to", state)
         if self.patches[source][dest] != state:
             self.patches[source][dest] = state
             if state:
@@ -74,43 +73,43 @@ class JR01State:
                     position = self.bars[bar]
                     val = self.pegs[bar][column][position]
                     if self.debug:
-                        print "column", column, "bar", bar,
-                        print "position", position, "val", val
+                        print("column", column, "bar", bar)
+                        print("position", position, "val", val)
                     active = active & val
                 if self.debug:
-                    print "column", column, "active", active
+                    print("column", column, "active", active)
                 if active:
                     # Turn on any lights connected to this column
                     for light in range(0, self.nlights):
                         if self.patches[column][light]:
                             result[light] = 1
-            
+
         return result
 
     def save(self, file):
         # Save overall parameters and peg and patch configurations only
-        file.write("JR01 version 1\n")
-        file.write("bars = " + `self.nbars` + "\n")
-        file.write("pegs = " + `self.npegs` + "\n")
-        file.write("lights = " + `self.nlights` + "\n")
+        file.write('JR01 version 1\n')
+        file.write(f'bars = {self.nbars}\n')
+        file.write(f'pegs = {self.npegs}\n')
+        file.write(f'lights = {self.nlights}\n')
 
         for bar in range(0, self.nbars):
             for peg in range(0, self.npegs):
                 for position in (0, 1):
                     if self.pegs[bar][peg][position]:
-                        file.write("pegs[%d][%d][%d] = 1\n" %
-                                   (bar, peg, position))
+                        file.write(f'pegs[{bar}][{peg}][{position}] = 1\n')
 
         for column in range(0, self.npegs):
             for light in range(0, self.nlights):
                 if self.patches[column][light]:
-                    file.write("patches[%d][%d] = 1\n" % (column, light))
+                    file.write(f'patches[{column}][{light}] = 1\n')
 
 
 class JR01Win:
     # Exceptions
     class InternalError(Exception):
         pass
+
     class BadFile(Exception):
         pass
 
@@ -151,7 +150,7 @@ class JR01Win:
     peg_gap = 60
     first_peg_x = peg_gap + bar_hmargin
     bar_delta = 12
-    bar_sensitivity = 5 # snap to position when within bar_sensitivity pixels
+    bar_sensitivity = 5  # snap to position when within bar_sensitivity pixels
     peg_outer_radius = 8
     peg_inner_radius = 3
     ring_gap = 10
@@ -187,7 +186,6 @@ class JR01Win:
                 self.position = position
                 self.jr01_state.set_bar_position(self.barnum, position)
 
-
     class Peg:
         def __init__(self, jr01_state, barnum, pegnum, position, canvas,
                      outer_item, inner_item):
@@ -215,32 +213,32 @@ class JR01Win:
         def toggle(self):
             self.jr01_state.set_peg_state(self.barnum, self.pegnum,
                                           self.position, 1 - self.state)
-            
+
     def __init__(self, tk, state):
 
-        self.frame = Tkinter.Frame(tk, background=self.background,
+        self.frame = tkinter.Frame(tk, background=self.background,
                                    highlightthickness=20,
                                    highlightcolor=self.barcolor,
                                    highlightbackground=self.barcolor)
         self.frame.pack()
 
-        button_frame = Tkinter.Frame(tk)
+        button_frame = tkinter.Frame(tk)
 
-        open_button = Tkinter.Button(button_frame, text="Open",
+        open_button = tkinter.Button(button_frame, text="Open",
                                      command=self.open)
-        open_button.pack(side=Tkinter.LEFT)
-        save_button = Tkinter.Button(button_frame, text="Save",
+        open_button.pack(side=tkinter.LEFT)
+        save_button = tkinter.Button(button_frame, text="Save",
                                      command=self.save)
-        save_button.pack(side=Tkinter.LEFT)
-        reset_button = Tkinter.Button(button_frame, text="Reset",
+        save_button.pack(side=tkinter.LEFT)
+        reset_button = tkinter.Button(button_frame, text="Reset",
                                       command=self.reset)
-        reset_button.pack(side=Tkinter.LEFT)
-        reconfigure_button = Tkinter.Button(button_frame, text="Reconfigure",
-                                      command=self.reconfigure)
-        reconfigure_button.pack(side=Tkinter.LEFT)
-        quit_button = Tkinter.Button(button_frame, text="Quit",
+        reset_button.pack(side=tkinter.LEFT)
+        reconfigure_button = tkinter.Button(button_frame, text="Reconfigure",
+                                            command=self.reconfigure)
+        reconfigure_button.pack(side=tkinter.LEFT)
+        quit_button = tkinter.Button(button_frame, text="Quit",
                                      command=tk.quit)
-        quit_button.pack(side=Tkinter.LEFT)
+        quit_button.pack(side=tkinter.LEFT)
 
         button_frame.pack()
 
@@ -256,7 +254,7 @@ class JR01Win:
 
     def init_state(self):
         # Graphics state information
-        
+
         # Each item with the "movable" tag is expected to have an
         # entry in move_sets.  The key is the item number, and the
         # value is a 2-tuple whose first value is the "main item" in
@@ -287,10 +285,10 @@ class JR01Win:
                                    self.state.npegs,
                                    self.state.nlights))
 
-    def reconfigure(self, state = None):
-        if state == None:
+    def reconfigure(self, state=None):
+        if state is None:
             while 1:
-                answer = tkSimpleDialog.askstring(
+                answer = tkinter.simpledialog.askstring(
                     "Parameters", "Enter three numbers: bars pegs lights")
                 if answer:
                     m = self.params_re.match(answer)
@@ -300,8 +298,8 @@ class JR01Win:
                                           int(m.group(3)))
                         break
                     else:
-                        tkMessageBox.showerror("Invalid",
-                                               "Invalid input.")
+                        tkinter.messagebox.showerror("Invalid",
+                                                     "Invalid input.")
                 else:
                     return
 
@@ -309,7 +307,7 @@ class JR01Win:
         self.init(state)
 
     def save(self):
-        filename = tkFileDialog.asksaveasfilename(
+        filename = tkinter.filedialog.asksaveasfilename(
             defaultextension=".jr01",
             filetypes=(("JR01 Files", "*.jr01"),
                        ("All Files", "*")))
@@ -319,7 +317,7 @@ class JR01Win:
             file.close()
 
     def open(self):
-        filename = tkFileDialog.askopenfilename(
+        filename = tkinter.filedialog.askopenfilename(
             defaultextension=".jr01",
             filetypes=(("JR01 Files", "*.jr01"),
                        ("All Files", "*")))
@@ -354,12 +352,12 @@ class JR01Win:
                             patches.append((int(m.group(1)),
                                             int(m.group(2))))
                         else:
-                            raise self.BadFile, "Invalid JR01 file"
+                            raise self.BadFile("Invalid JR01 file")
                     if not (nbars and npegs and nlights):
-                        raise self.Badfile, ("nbars, npegs, and nlights " +
-                                             "must all be defined")
-                except self.BadFile, msg:
-                    tkMessageBox.showerror("Bad File", msg)
+                        raise self.Badfile("nbars, npegs, and nlights " +
+                                           "must all be defined")
+                except self.BadFile as e:
+                    tkinter.messagebox.showerror("Bad File", e)
 
                 # Good file.  Reset state and load configuration.
                 self.reconfigure(JR01State(nbars, npegs, nlights))
@@ -369,11 +367,11 @@ class JR01Win:
                     self.state.set_patch(patch[0], patch[1], 1)
 
             else:
-                tkMessageBox.showerror("Bad File",
-                                       "File does not look like a JR01 file")
+                tkinter.messagebox.showerror(
+                    "Bad File", "File does not look like a JR01 file")
 
     def create_canvas(self):
-        self.canvas = Tkinter.Canvas(self.frame,
+        self.canvas = tkinter.Canvas(self.frame,
                                      width=self.width, height=self.height,
                                      background=self.bgcolor,
                                      borderwidth=0, highlightthickness=0,
@@ -445,7 +443,7 @@ class JR01Win:
                              self.bar_height +
                              2 * self.vline_overhang)
         self.bar_ring_y = (self.vline_top + self.vline_height +
-                                self.ring_gap)
+                           self.ring_gap)
         self.light_ring_y = self.bar_ring_y + self.light_top_gap
         self.light_y = (self.light_ring_y + self.ring_gap +
                         self.light_radius)
@@ -472,20 +470,19 @@ class JR01Win:
                                     x, self.vline_top + self.vline_height,
                                     fill=self.markcolor)
 
-
     def create_bar(self, barnum, top):
-        grouptag = self.bartag + "-" + `barnum`
+        grouptag = self.bartag + "-" + str(barnum)
         main_item = self.canvas.create_rectangle(
             self.bar_left, top,
             self.bar_right, self.bar_height + top,
-            tags = (grouptag, self.movabletag),
-            width = 2, fill = self.barcolor)
+            tags=(grouptag, self.movabletag),
+            width=2, fill=self.barcolor)
         self.move_sets[main_item] = (main_item, grouptag)
         handle = self.canvas.create_rectangle(
             self.bar_right - self.handle_width, top + 2,
             self.bar_right - 4, top + self.bar_height - 4,
-            tags = (grouptag, self.movabletag),
-            width = 0, fill=self.barshadow)
+            tags=(grouptag, self.movabletag),
+            width=0, fill=self.barshadow)
         self.move_sets[handle] = (main_item, grouptag)
 
         bar = self.Bar(self.state, barnum)
@@ -507,16 +504,16 @@ class JR01Win:
                 peg_y - self.peg_outer_radius,
                 dx + peg_x + self.peg_outer_radius,
                 peg_y + self.peg_outer_radius,
-                tags = (grouptag, self.pegtag),
-                outline = "",
+                tags=(grouptag, self.pegtag),
+                outline="",
                 fill=self.barcolor)
-            
+
             inner_item = self.canvas.create_oval(
                 dx + peg_x - self.peg_inner_radius,
                 peg_y - self.peg_inner_radius,
                 dx + peg_x + self.peg_inner_radius,
                 peg_y + self.peg_inner_radius,
-                tags = (grouptag, self.pegtag),
+                tags=(grouptag, self.pegtag),
                 fill=self.barshadow)
 
             if (dx > 0):
@@ -560,8 +557,8 @@ class JR01Win:
                                     y + self.light_radius))
 
     def toggle_peg(self, event):
-        item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
-        if self.pegs.has_key(item):
+        item = self.canvas.find_withtag(tkinter.CURRENT)[0]
+        if item in self.pegs:
             peg = self.pegs[item]
             peg.toggle()
 
@@ -569,16 +566,16 @@ class JR01Win:
         self.last_x = event.x
 
     def bar_move_cb(self, event):
-        item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
+        item = self.canvas.find_withtag(tkinter.CURRENT)[0]
 
         items = (item,)
         coords = self.canvas.coords(item)
 
         bar = None
-        if (self.bars.has_key(item)):
+        if item in self.bars:
             bar = self.bars[item]
 
-        if self.move_sets.has_key(item):
+        if item in self.move_sets:
             coords = self.canvas.coords(self.move_sets[item][0])
             items = self.canvas.find_withtag(self.move_sets[item][1])
 
@@ -614,7 +611,7 @@ class JR01Win:
         self.last_x = self.last_x + dx
 
     def start_line(self, event):
-        item = self.canvas.find_withtag(Tkinter.CURRENT)[0]
+        item = self.canvas.find_withtag(tkinter.CURRENT)[0]
         sourcedata = self.sourcedata[item]
         self.set_cur_line(self.create_patch_line(
             sourcedata[1], sourcedata[2],
@@ -625,14 +622,14 @@ class JR01Win:
         self.canvas.tag_bind(self.linetag, "<ButtonRelease-1>", self.end_line)
 
     def continue_line(self, event):
-        self.set_cur_line(self.canvas.find_withtag(Tkinter.CURRENT)[0])
+        self.set_cur_line(self.canvas.find_withtag(tkinter.CURRENT)[0])
         x0, y0, x1, y1 = self.canvas.coords(self.cur_line)
         source = self.find_pointdata(x0, y0, self.sourcedata)
         dest = self.find_pointdata(x1, y1, self.destdata)
-        if source == None:
-            raise self.InternalError, "no source item"
-        if dest == None:
-            raise self.InternalError, "no dest item"
+        if source is None:
+            raise self.InternalError("no source item")
+        if dest is None:
+            raise self.InternalError("no dest item")
         self.move_line(event)
         self.state.set_patch(self.sourcedata[source][0],
                              self.destdata[dest][0], 0)
@@ -650,8 +647,8 @@ class JR01Win:
             self.canvas.coords(self.cur_line,
                                x0, y0, destdata[1], destdata[2])
             source = self.find_pointdata(x0, y0, self.sourcedata)
-            if source == None:
-                raise self.InternalError, "no source item"
+            if source is None:
+                raise self.InternalError("no source item")
 
             sourcenum = self.sourcedata[source][0]
             destnum = self.destdata[dest][0]
@@ -678,7 +675,7 @@ class JR01Win:
                                              y + self.ring_outer_radius)
         result = None
         for item in items:
-            if pointdata.has_key(item):
+            if item in pointdata:
                 result = item
         return result
 
@@ -691,7 +688,7 @@ class JR01Win:
                                           fill=self.selectedlinecolor)
 
     def update_peg(self, barnum, pegnum, position, state):
-        peg = self.peg_table[(barnum,pegnum,position)]
+        peg = self.peg_table[(barnum, pegnum, position)]
         peg.state = state
         peg.update()
 
@@ -725,8 +722,9 @@ class JR01Win:
 
     def turn_lights_off(self):
         self.set_lights([0] * self.state.nlights)
-        
-root = Tkinter.Tk()
+
+
+root = tkinter.Tk()
 root.title("JR01")
 root.resizable(0, 0)
 JR01Win(root, JR01State())
