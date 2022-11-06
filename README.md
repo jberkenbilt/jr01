@@ -1,6 +1,6 @@
-# JR01 Simulator
+# Jr01 Simulator
 
-This is a simulator for the JR01 computer. The JR01 computer was created in 1972 by Honeywell-Bull. For more information, see my [blog post]( https://medium.com/@jberkenbilt/jr01-2e6a42b6cc92).
+This is a simulator for the Jr01 computer. The Jr01 computer was created in 1972 by Honeywell-Bull. For more information, see my [blog post]( https://medium.com/@jberkenbilt/jr01-2e6a42b6cc92).
 
 # Running the Simulator
 
